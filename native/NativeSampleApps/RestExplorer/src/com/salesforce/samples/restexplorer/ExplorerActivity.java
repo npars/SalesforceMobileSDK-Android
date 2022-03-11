@@ -31,6 +31,7 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.os.Bundle;
 import android.text.method.ScrollingMovementMethod;
+import android.util.Log;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
@@ -46,6 +47,7 @@ import com.salesforce.androidsdk.accounts.UserAccountManager;
 import com.salesforce.androidsdk.app.SalesforceSDKManager;
 import com.salesforce.androidsdk.config.BootConfig;
 import com.salesforce.androidsdk.rest.ApiVersionStrings;
+import com.salesforce.androidsdk.rest.ClientManager;
 import com.salesforce.androidsdk.rest.RestClient;
 import com.salesforce.androidsdk.rest.RestClient.AsyncRequestCallback;
 import com.salesforce.androidsdk.rest.RestRequest;
@@ -67,6 +69,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeSet;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -132,6 +137,8 @@ public class ExplorerActivity extends SalesforceActivity {
 
 		((RestExplorerApp.RestExplorerSDKManager) RestExplorerApp.RestExplorerSDKManager.getInstance())
 				.addDevAction(this, "Export Credentials to Clipboard", this::exportCredentials);
+		((RestExplorerApp.RestExplorerSDKManager) RestExplorerApp.RestExplorerSDKManager.getInstance())
+				.addDevAction(this, "Reauth User", this::reauthUser);
 	}
 
 	@Override
@@ -586,6 +593,30 @@ public class ExplorerActivity extends SalesforceActivity {
 	 */
 	public void onDevMenuClick(View v) {
 		RestExplorerApp.RestExplorerSDKManager.getInstance().showDevSupportDialog(this);
+	}
+
+	private void reauthUser() {
+		ExecutorService executor = Executors.newSingleThreadExecutor();
+		executor.submit(() -> {
+			SalesforceSDKManager salesforceSdk = RestExplorerApp.RestExplorerSDKManager.getInstance();
+			UserAccount user = salesforceSdk.getUserAccountManager().getCurrentUser();
+			if (user == null) {
+				Log.e("Reauth", "Missing user!");
+			}
+
+			ClientManager.AccMgrAuthTokenProvider authTokenProvider =
+					new ClientManager.AccMgrAuthTokenProvider(
+							SalesforceSDKManager.getInstance().getClientManager(),
+							user.getInstanceServer(),
+							user.getAuthToken(),
+							user.getRefreshToken());
+			String token = authTokenProvider.getNewAuthToken();
+			if (token == null) {
+				Log.e("Reauth", "Null Auth Token on refresh!");
+			} else {
+				Log.i("Reauth", "Good Auth Token on refresh.");
+			}
+		});
 	}
 
 
